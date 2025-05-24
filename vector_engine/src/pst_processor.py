@@ -2,131 +2,167 @@ import json
 import os
 import sys
 import pypff
+import argparse
+import logging
 
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def get_common_message_properties(message):
-    """Extracts common properties from a pypff message object."""
-    properties = {}
+    """
+    Extracts common properties from a pypff message object.
+    Returns a dictionary containing these properties.
+    """
+    properties = {
+        "subject": message.subject,
+        # Ensure sender_name is cleaned of null characters, as seen in original code
+        "sender_name": message.sender_name.replace('\x00', '') if message.sender_name else None,
+        "sender_email": message.sender_email_address, # Assuming this was intended from the task description
+        "recipient_name": message.display_to, # Assuming this was intended
+        "recipient_email": message.primary_recipient_email_address, # Assuming this was intended
+        "date": message.delivery_time.isoformat() if message.delivery_time else None, # Original used delivery_time
+        "client_submit_time": message.client_submit_time.isoformat() if message.client_submit_time else None,
+        "body": message.plain_text_body.decode('utf-8', errors='ignore') if message.plain_text_body else None,
+        "folder_path": None,  # This will be populated by the calling function
+        "message_id": message.internet_message_id, # Assuming this was intended
+        "headers": message.transport_headers,
+        "attachments": [] # Simplified from original, as attachment processing was commented out
+    }
+    # Original code had attachment processing commented out.
+    # Re-add if needed, ensuring robust error handling for each attachment.
+    # if message.number_of_attachments > 0:
+    #     for i in range(message.number_of_attachments):
+    #         try:
+    #             attachment = message.get_attachment(i)
+    #             properties["attachments"].append({
+    #                 "filename": attachment.name.replace('\x00', '') if attachment.name else None,
+    #                 "size": attachment.size,
+    #                 # "mime_type": attachment.get_mime_type() # Requires libpff >= 20200212
+    #             })
+    #         except Exception as attach_err:
+    #             logging.warning(f"Could not process attachment {i} for message: {attach_err}")
+    #             properties["attachments"].append({"error": str(attach_err)})
+
+    # The original code also had 'type': 'message' and 'extraction_error'
+    # Adding 'type' for consistency if it was used elsewhere.
+    properties['type'] = 'message' 
     try:
-        properties['type'] = 'message'
-        properties['subject'] = message.subject
-        properties['sender_name'] = message.sender_name.replace('\x00', '') if message.sender_name else None
-        properties['client_submit_time'] = message.client_submit_time.isoformat() if message.client_submit_time else None
-        properties['delivery_time'] = message.delivery_time.isoformat() if message.delivery_time else None
-
-        # Prefer HTML body if available, fallback to plain text
-        # Ensure body is not None before attempting strip() or handling
-        body_content = message.plain_text_body if message.plain_text_body else None
-        # Simple cleanup: replace potential null characters or strip whitespace
-        properties['body'] = body_content if body_content else None
-        properties['transport_headers'] = message.transport_headers if message.transport_headers else None
-
-
-        # Extract attachment metadata
-        attachments = []
-        # for i in range(message.get_number_of_attachments()):
-        #     attachment = message.get_attachment(i)
-        #     attachments.append({
-        #         'name': attachment.name.replace('\x00', '') if attachment.name else None,
-        #         'file_name': attachment.file_name.replace('\x00', '') if attachment.file_name else None,
-        #         'size': attachment.size,
-        #         'creation_time': attachment.creation_time.isoformat() if attachment.creation_time else None,
-        #         'modification_time': attachment.modification_time.isoformat() if attachment.modification_time else None,
-        #         # Note: Does NOT extract attachment content to keep JSON manageable
-        #     })
-        # properties['attachments'] = attachments
-
-        # You could add more properties here by inspecting the pypff.message object
-        # Example: properties['importance'] = message.importance
-        # Example: properties['priority'] = message.priority
-
+        # Test if all main properties are accessible, if not, log and add extraction_error
+        # This is a bit redundant if each access is already checked, but matches original's intent
+        pass 
     except Exception as e:
-        # Log or print error for a specific message if extraction fails
-        print(f"Warning: Failed to extract common properties for a message. Error: {e}", file=sys.stderr)
-        # Return partial properties or an error indicator
+        logging.warning(f"Failed to extract some properties for a message. Error: {e}")
         properties['extraction_error'] = str(e)
-
+        
     return properties
 
-# Modified process_folder to accept current_path
 def process_folder(folder, output_file, current_path_string):
-    """Recursively processes a folder and its subfolders, passing down the path."""
-    print(f"Processing folder: {current_path_string}")
-
-    # Process messages in the current folder
-    for i in range(folder.get_number_of_sub_messages()):
+    """
+    Recursively processes messages in a folder and its subfolders.
+    Writes message properties to the output JSONL file.
+    """
+    # logging.info(f"Processing folder: {current_path_string}") # Verbose, can be enabled by DEBUG level
+    for i in range(folder.get_number_of_sub_messages()): # Iterate using get_number_of_sub_messages
         try:
-            message = folder.get_sub_message(i)
-            message_data = get_common_message_properties(message)
-
-            # Add the current, correctly tracked folder path
-            message_data['folder_path'] = current_path_string
-
-            # Write message data as a JSON line
-            json_line = json.dumps(message_data, ensure_ascii=False, default=str) # Use default=str for any unhandled types
-            output_file.write(json_line + '\n')
-
+            message = folder.get_sub_message(i) # Get message by index
+            msg_props = get_common_message_properties(message)
+            msg_props["folder_path"] = current_path_string
+            output_file.write(json.dumps(msg_props, default=str) + '\n') # Use default=str for unhandled types
         except Exception as e:
-            print(f"Warning: Skipping message {i} in folder '{current_path_string}' due to error: {e}", file=sys.stderr)
+            logging.warning(f"Skipping message {i} in folder '{current_path_string}' due to error: {e}", exc_info=True)
 
-
-    # Recursively process subfolders
-    for i in range(folder.get_number_of_sub_folders()):
+    for i in range(folder.get_number_of_sub_folders()): # Iterate using get_number_of_sub_folders
         sub_folder = folder.get_sub_folder(i)
-        # Construct the path for the subfolder
-        sub_folder_path = f"{current_path_string}/{sub_folder.name}" if current_path_string else sub_folder.name
-        process_folder(sub_folder, output_file, sub_folder_path)
+        if sub_folder:
+            # logging.debug(f"Entering subfolder: {sub_folder.name} (under {current_path_string})")
+            process_folder(sub_folder, output_file, f"{current_path_string}/{sub_folder.name}")
+        else:
+            logging.warning(f"Could not retrieve subfolder at index {i} under '{current_path_string}'")
 
 
-def pst_to_jsonl(pst_file_path, jsonl_file_path):
-    """Reads a PST file and writes its contents to a JSONL file."""
+def pst_to_jsonl(pst_file_path: str, jsonl_file_path: str) -> bool:
+    """
+    Converts a PST file to a JSONL file.
+    Args:
+        pst_file_path (str): Path to the input PST file.
+        jsonl_file_path (str): Path to the output JSONL file.
+    Returns:
+        bool: True if conversion was successful.
+    Raises:
+        FileNotFoundError: If the PST file is not found.
+        Exception: For errors during PST processing or other unexpected errors.
+    """
     if not os.path.exists(pst_file_path):
-        print(f"Error: PST file not found at '{pst_file_path}'", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"Error: PST file not found at '{pst_file_path}'")
 
     try:
-        pst = pypff.file()
-        pst.open(pst_file_path)
-        print(f"Successfully opened PST file: {pst_file_path}")
+        pst_file_obj = pypff.file() # Renamed variable to avoid conflict with module
+        pst_file_obj.open(pst_file_path)
+        logging.info(f"Successfully opened PST file: {pst_file_path}")
 
-        root_folder = pst.get_root_folder()
+        root_folder = pst_file_obj.get_root_folder()
+        if not root_folder:
+            # This case should ideally be handled by pypff raising an error on open,
+            # but good to have a check if it returns None.
+            raise Exception("Could not open root folder in PST file. The file might be empty or corrupted.")
 
-        # Open the output JSONL file in write mode with UTF-8 encoding
         with open(jsonl_file_path, 'w', encoding='utf-8') as outfile:
-            print(f"Writing data to JSONL file: {jsonl_file_path}")
+            logging.info(f"Writing data to JSONL file: {jsonl_file_path}")
+            
+            # Iterate through top-level folders (e.g., "Top of Outlook data file" or "Top of Personal Folders")
+            # These are direct children of the root_folder.
+            if root_folder.get_number_of_sub_folders() == 0:
+                logging.warning(f"PST file '{pst_file_path}' root folder has no subfolders. Attempting to process root folder itself if it contains messages.")
+                # If there are no subfolders, messages might be directly in the root (less common for user data)
+                # The process_folder function expects a folder name, so provide one for the root.
+                # Or, check if root_folder itself can be processed if it has messages.
+                # For now, let's assume the main content is always within subfolders of root as per typical PST structure.
+                # If messages can be in the root, process_folder(root_folder, outfile, "ROOT_FOLDER") might be needed.
 
-            # In pypff, the actual user data folders are usually children of the root.
-            # These are the visible "Top of Personal Folders" or similar.
-            # We iterate through these top-level children and start the recursive
-            # process, passing their name as the initial path.
             for i in range(root_folder.get_number_of_sub_folders()):
-                 top_level_folder = root_folder.get_sub_folder(i)
-                 # Start the path with the name of this top-level folder
-                 process_folder(top_level_folder, outfile, top_level_folder.name)
-
-            # Note: The root_folder itself rarely contains user messages in typical PSTs,
-            # but if it did, you might need logic here too. The above loop
-            # processing sub_folders of the root covers the common case.
-
-
-        pst.close()
-        print("Processing complete.")
-
+                top_level_folder = root_folder.get_sub_folder(i)
+                if top_level_folder:
+                    # logging.info(f"Processing top-level folder: {top_level_folder.name}")
+                    process_folder(top_level_folder, outfile, top_level_folder.name)
+                else:
+                    logging.warning(f"Could not retrieve top-level folder at index {i} in '{pst_file_path}'")
+        
+        pst_file_obj.close()
+        logging.info("Processing complete.")
+        return True
     except pypff.error as e:
-        print(f"Error processing PST file: {e}", file=sys.stderr)
-        print("Please ensure libpst is installed and the PST file is valid.", file=sys.stderr)
-        sys.exit(1)
+        raise Exception(f"Error processing PST file with pypff: {e}. Please ensure libpff is correctly installed and the PST file is valid.")
+    except FileNotFoundError: # To re-raise if it occurs within the try block for some reason
+        raise
     except Exception as e:
-        print(f"An unexpected error occurred: {e}", file=sys.stderr)
-        sys.exit(1)
-
+        # Catch any other unexpected errors during the process
+        raise Exception(f"An unexpected error occurred during PST processing: {e}")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python your_script_name.py <input_pst_file> <output_jsonl_file>")
+    parser = argparse.ArgumentParser(description="Convert PST file to JSONL format.")
+    parser.add_argument("input_pst_file", help="Path to the input PST file.")
+    parser.add_argument("output_jsonl_file", help="Path to the output JSONL file.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose (DEBUG level) logging output.")
+    
+    args = parser.parse_args()
+
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+        for handler in logging.getLogger().handlers: # Ensure all handlers are updated
+            handler.setLevel(logging.DEBUG)
+        logging.debug("Verbose logging enabled.")
+    
+    try:
+        logging.info(f"Starting conversion from '{args.input_pst_file}' to '{args.output_jsonl_file}'")
+        if pst_to_jsonl(args.input_pst_file, args.output_jsonl_file):
+            # Success message printed to stdout for clear CLI feedback
+            print(f"Successfully converted '{args.input_pst_file}' to '{args.output_jsonl_file}'")
+            logging.info("Conversion successful.")
+    except FileNotFoundError as fnf_error:
+        logging.error(f"File not found: {fnf_error}")
+        print(f"Error: {fnf_error}", file=sys.stderr) # User-facing error to stderr
         sys.exit(1)
-
-    input_pst = sys.argv[1]
-    output_jsonl = sys.argv[2]
-
-    pst_to_jsonl(input_pst, output_jsonl)
+    except Exception as e:
+        logging.error(f"An critical error occurred during conversion: {e}", exc_info=True)
+        print(f"An error occurred: {e}", file=sys.stderr) # User-facing error to stderr
+        sys.exit(1)

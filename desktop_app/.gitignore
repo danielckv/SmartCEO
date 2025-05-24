@@ -1,0 +1,28 @@
+# Tauri build files
+/src-tauri/target/
+/src-tauri/Cargo.lock
+
+# Vite build files
+/dist/
+node_modules/
+.DS_Store
+
+# IDE specific
+.idea/
+.vscode/
+
+# OS specific
+Thumbs.db
+desktop.ini
+
+# Optional: Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Optional: Environment variables
+.env
+.env*.local
+!/.env.example
