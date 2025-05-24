@@ -1,0 +1,9 @@
+.idea
+.DS_Store
+__pycache__
+_data
+venv
+target
+dist
+.venv
+node_modules
