@@ -1,4 +1,4 @@
-# CEO Email Explorer - Setup and Usage Guide
+# SmartCEO: Full AI Suit Tools
 
 ## I. Introduction
 
