@@ -211,8 +211,8 @@ def main_load_process(jsonl_file_path: str, chroma_db_path: str, collection_name
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Load email data from JSONL, generate embeddings, and store in ChromaDB.")
-    parser.add_argument("jsonl_file", help="Path to the input JSONL file (e.g., _data/aviel_emails.jsonl).")
-    parser.add_argument("chroma_db_path", help="Path to the ChromaDB storage directory (e.g., _data/chroma_db).")
+    parser.add_argument("--jsonl_file", help="Path to the input JSONL file (e.g., _data/aviel_emails.jsonl).")
+    parser.add_argument("--chroma_db_path", default="./_data/chroma_db", help="Path to the ChromaDB storage directory (e.g., _data/chroma_db).")
     parser.add_argument("--collection_name", default="outlook_emails", help="Name of the collection in ChromaDB (default: outlook_emails).")
     parser.add_argument("--embedding_model", default="paraphrase-multilingual-MiniLM-L12-v2", help="Name of the sentence-transformer model (default: paraphrase-multilingual-MiniLM-L12-v2).")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose (DEBUG level) logging output.")

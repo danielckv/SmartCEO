@@ -94,7 +94,6 @@ def main():
                 collection_name=args.collection_name,
                 use_ollama_parsing=not args.no_ollama,
                 ollama_model=args.ollama_model,
-                ollama_url=args.ollama_url,
                 n_results=args.n_results
             )
             # Output JSON to stdout - this is the success confirmation for search
