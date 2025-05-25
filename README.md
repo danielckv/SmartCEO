@@ -26,6 +26,7 @@ Before you begin, please ensure your system meets the following requirements:
 *   **Rust (Optional - for building from source)**:
     *   If you intend to build the Tauri application from its source code (not required if using a pre-built version), you will need Rust (latest stable version, e.g., 1.78+) and Cargo.
     *   Install Rust via `rustup` from [rustup.rs](https://rustup.rs/).
+    *   For detailed instructions on building from source, including local and cross-platform builds, see **Section VIII: Building the Desktop Application from Source (Advanced)**.
 
 *   **Ollama (Optional - for enhanced search)**:
     *   Ollama provides advanced natural language processing capabilities that can improve the understanding of your search queries.
@@ -164,4 +165,89 @@ This function allows you to search the emails you've previously processed.
     *   The application has a fallback to basic regex/semantic search if Ollama is not available or fails.
 
 For more detailed errors, check the logs printed in the UI and any console output if you launched the application from a terminal.
+
+## VIII. Building the Desktop Application from Source (Advanced)
+
+This section describes how to build the `desktop_app` (Tauri application) from its source code. This is generally needed if you want to make modifications to the application itself or if pre-built binaries are not available for your platform.
+
+### 1. Prerequisites
+
+Ensure you have the following installed:
+
+*   **Node.js and npm**: Required for the web frontend part of Tauri. Download from [nodejs.org](https://nodejs.org/).
+*   **Rust and Cargo**: Install via `rustup` from [rustup.rs](https://rustup.rs/).
+*   **System Build Tools**:
+    *   **Windows**: Microsoft C++ Build Tools (available in Visual Studio Installer).
+    *   **macOS**: Xcode Command Line Tools (`xcode-select --install`).
+    *   **Linux**: `gcc`, `make`, `webkit2gtk` development libraries (e.g., `sudo apt-get install build-essential libwebkit2gtk-4.0-dev`).
+*   **Tauri CLI**: Install using Cargo:
+    ```bash
+    cargo install tauri-cli
+    ```
+
+### 2. Standard Local Build (Current Platform)
+
+To build the application for your current operating system and architecture:
+
+1.  **Navigate to the app directory**:
+    ```bash
+    cd desktop_app
+    ```
+2.  **Install frontend dependencies**:
+    ```bash
+    npm install
+    ```
+3.  **Build the application**:
+    ```bash
+    cargo tauri build
+    ```
+    The resulting installer/bundle will be located in `desktop_app/src-tauri/target/release/bundle/`.
+
+### 3. Cross-Platform Builds (from macOS)
+
+The project includes a script to facilitate building for macOS, Windows (x86_64), and Linux (x86_64) from a macOS environment.
+
+**Additional Prerequisites for Cross-Compilation from macOS:**
+
+*   **`cargo-xwin`**: For Windows builds. Install with `cargo install cargo-xwin`.
+    *   Ensure the `XWIN_CACHE_DIR` environment variable is set (e.g., `export XWIN_CACHE_DIR="$HOME/.xwin-cache"`) and the directory exists.
+*   **`cross`**: For Linux builds. Install with `cargo install cross`.
+    *   `cross` typically uses Docker for its build environments. Ensure Docker is installed and running.
+*   **Rust Targets**: Add the necessary cross-compilation targets using `rustup`:
+    ```bash
+    # For Windows x86_64
+    rustup target add x86_64-pc-windows-msvc
+    # For Linux x86_64
+    rustup target add x86_64-unknown-linux-gnu
+    # For macOS (usually pre-installed or add if needed)
+    rustup target add x86_64-apple-darwin
+    rustup target add aarch64-apple-darwin
+    ```
+    *(Note: The build script also mentions ARM targets like `aarch64-pc-windows-msvc` and `aarch64-unknown-linux-gnu`. If you need these, add them via `rustup` as well and potentially modify the build script.)*
+
+**Using the Build Script:**
+
+1.  **Navigate to the app directory**:
+    ```bash
+    cd desktop_app
+    ```
+2.  **Ensure the script is executable**:
+    ```bash
+    chmod +x build-cross-platform.sh
+    ```
+3.  **Run the script**:
+    ```bash
+    ./build-cross-platform.sh
+    ```
+    The script will attempt to build for macOS, Windows (x86_64), and Linux (x86_64).
+    Bundled applications will be copied into the `desktop_app/dist_cross_platform/` directory.
+
+**Important Notes for Cross-Compilation:**
+
+*   **Windows Builds**: `cargo-xwin` requires the appropriate Windows SDK components. It will attempt to download them into `XWIN_CACHE_DIR`. This can take time and a significant amount of disk space on the first run.
+*   **Linux Builds**: `cross` relies on Docker images that contain the necessary toolchains. Ensure Docker is running and has internet access to pull images.
+*   **ARM Targets**: The provided script primarily focuses on x86_64 targets. To build for ARM (e.g., `aarch64-apple-darwin`, `aarch64-pc-windows-msvc`, `aarch64-unknown-linux-gnu`), you would need to:
+    1.  Ensure the corresponding Rust targets are installed via `rustup`.
+    2.  Modify the `build-cross-platform.sh` script to include `cargo tauri build --target <your-arm-target>` commands.
+*   **Troubleshooting**: Cross-compilation can be complex. If you encounter issues, check the output logs carefully. Ensure all prerequisites are met, environment variables (like `XWIN_CACHE_DIR`) are correctly set, and that Docker (for `cross`) is functioning. Consult the documentation for `tauri`, `cargo-xwin`, and `cross` for more detailed guidance.
 ```
